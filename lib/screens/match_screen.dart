@@ -23,6 +23,44 @@ class _MatchScreenState extends State<MatchScreen> with SingleTickerProviderStat
   bool isMatchComplete = false;
   String lastAction = '';
   final int winningScore = 21;
+
+  // Stamina system
+  double playerStamina = 100.0;
+  double opponentStamina = 100.0;
+  final double maxStamina = 100.0;
+
+  // Defensive actions
+  bool isDefending = false;
+  String? defensiveAction; // 'steal' or 'block'
+
+  // Momentum/Streak system
+  int playerStreak = 0; // Positive = hot streak, Negative = cold streak
+  int opponentStreak = 0;
+  static const int hotStreakThreshold = 3; // 3+ makes = hot
+  static const int coldStreakThreshold = -3; // 3+ misses = cold
+
+  // Match Statistics
+  final Map<String, int> playerStats = {
+    'fgMade': 0,
+    'fgAttempted': 0,
+    'threeMade': 0,
+    'threeAttempted': 0,
+    'turnovers': 0,
+    'steals': 0,
+    'blocks': 0,
+  };
+
+  final Map<String, int> opponentStats = {
+    'fgMade': 0,
+    'fgAttempted': 0,
+    'threeMade': 0,
+    'threeAttempted': 0,
+    'turnovers': 0,
+    'steals': 0,
+    'blocks': 0,
+  };
+
+  bool showStats = false; // Toggle for stats view
   
   @override
   void initState() {
@@ -84,37 +122,238 @@ class _MatchScreenState extends State<MatchScreen> with SingleTickerProviderStat
   }
   
   Widget _buildNoOpponentView(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            CupertinoIcons.game_controller_solid,
-            size: 80,
-            color: CupertinoColors.systemGrey.resolveFrom(context),
+    final gameProvider = context.watch<GameProvider>();
+    final player = gameProvider.player;
+
+    if (player == null) {
+      return const Center(
+        child: Text(
+          'Create a player from the Home screen',
+          style: TextStyle(fontSize: 16),
+        ),
+      );
+    }
+
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Match History',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Your career statistics',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: CupertinoColors.systemGrey.resolveFrom(context),
+                  ),
+                ),
+                const SizedBox(height: 30),
+
+                // Overall Record
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        CupertinoColors.activeOrange.resolveFrom(context).withOpacity(0.2),
+                        CupertinoColors.activeOrange.resolveFrom(context).withOpacity(0.05),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(
+                      color: CupertinoColors.activeOrange.resolveFrom(context).withOpacity(0.3),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildRecordStat(
+                        label: 'Wins',
+                        value: '${player.stats.wins}',
+                        color: CupertinoColors.activeGreen,
+                      ),
+                      Container(
+                        width: 1,
+                        height: 40,
+                        color: CupertinoColors.systemGrey4.resolveFrom(context),
+                      ),
+                      _buildRecordStat(
+                        label: 'Losses',
+                        value: '${player.stats.losses}',
+                        color: CupertinoColors.systemRed,
+                      ),
+                      Container(
+                        width: 1,
+                        height: 40,
+                        color: CupertinoColors.systemGrey4.resolveFrom(context),
+                      ),
+                      _buildRecordStat(
+                        label: 'Win %',
+                        value: player.stats.matchesPlayed > 0
+                            ? '${(player.stats.winRate * 100).toStringAsFixed(0)}%'
+                            : '0%',
+                        color: CupertinoColors.activeOrange,
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 25),
+
+                // Stats Grid
+                _buildStatCard(
+                  context,
+                  icon: CupertinoIcons.game_controller_solid,
+                  label: 'Matches Played',
+                  value: '${player.stats.matchesPlayed}',
+                  color: CupertinoColors.systemBlue,
+                ),
+                const SizedBox(height: 15),
+                _buildStatCard(
+                  context,
+                  icon: CupertinoIcons.sportscourt,
+                  label: 'Total Points',
+                  value: '${player.stats.totalPoints}',
+                  color: CupertinoColors.systemPurple,
+                ),
+                const SizedBox(height: 15),
+                _buildStatCard(
+                  context,
+                  icon: CupertinoIcons.chart_bar_fill,
+                  label: 'Points Per Game',
+                  value: player.stats.matchesPlayed > 0
+                      ? player.stats.pointsPerGame.toStringAsFixed(1)
+                      : '0.0',
+                  color: CupertinoColors.systemIndigo,
+                ),
+
+                const SizedBox(height: 30),
+
+                // Call to Action
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    decoration: BoxDecoration(
+                      color: CupertinoColors.activeOrange.resolveFrom(context),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Center(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            CupertinoIcons.location_fill,
+                            color: CupertinoColors.white,
+                          ),
+                          SizedBox(width: 10),
+                          Text(
+                            'Find Opponent',
+                            style: TextStyle(
+                              color: CupertinoColors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  onPressed: () {
+                    TabNavigator.of(context)?.tabController.index = 3;
+                  },
+                ),
+
+                const SizedBox(height: 20),
+              ],
+            ),
           ),
-          const SizedBox(height: 20),
-          const Text(
-            'No opponent selected',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRecordStat({
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            color: CupertinoColors.systemGrey,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatCard(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: CupertinoColors.systemGrey6.resolveFrom(context),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              icon,
+              color: color,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 15),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Text(
+            value,
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
+              color: color,
             ),
-          ),
-          const SizedBox(height: 10),
-          const Text(
-            'Go to Parks to challenge an opponent',
-            style: TextStyle(
-              fontSize: 16,
-              color: CupertinoColors.systemGrey,
-            ),
-          ),
-          const SizedBox(height: 30),
-          CupertinoButton.filled(
-            child: const Text('Go to Parks'),
-            onPressed: () {
-              TabNavigator.of(context)?.tabController.index = 3;
-            },
           ),
         ],
       ),
@@ -124,20 +363,25 @@ class _MatchScreenState extends State<MatchScreen> with SingleTickerProviderStat
   Widget _buildMatchView(BuildContext context, GameProvider gameProvider) {
     final player = gameProvider.player!;
     final opponent = widget.opponent!;
-    
+
     return Stack(
       children: [
-        Column(
-          children: [
-            _buildScoreboard(context, player, opponent),
-            Expanded(
-              child: _buildCourt(context, gameProvider),
-            ),
-            if (isMatchInProgress && isPlayerTurn && !isMatchComplete)
-              _buildActionButtons(context, gameProvider),
-            if (isMatchComplete)
-              _buildMatchResult(context, gameProvider),
-          ],
+        SingleChildScrollView(
+          child: Column(
+            children: [
+              _buildScoreboard(context, player, opponent),
+              SizedBox(
+                height: 300,
+                child: _buildCourt(context, gameProvider),
+              ),
+              if (isMatchInProgress && isPlayerTurn && !isMatchComplete)
+                _buildActionButtons(context, gameProvider),
+              if (isMatchInProgress && !isPlayerTurn && !isMatchComplete && !isDefending)
+                _buildDefensiveButtons(context, gameProvider),
+              if (isMatchComplete)
+                _buildMatchResult(context, gameProvider),
+            ],
+          ),
         ),
         if (lastAction.isNotEmpty)
           Positioned(
@@ -184,42 +428,78 @@ class _MatchScreenState extends State<MatchScreen> with SingleTickerProviderStat
           bottomRight: Radius.circular(20),
         ),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
+      child: Column(
         children: [
-          _buildPlayerScore(
-            name: player.name,
-            score: playerScore,
-            ovr: player.overallRating,
-            isActive: isPlayerTurn,
-            isPlayer: true,
-          ),
-          Column(
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              const Text(
-                'VS',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
+              _buildPlayerScore(
+                name: player.name,
+                score: playerScore,
+                ovr: player.overallRating,
+                isActive: isPlayerTurn,
+                isPlayer: true,
               ),
-              const SizedBox(height: 5),
-              Text(
-                'First to $winningScore',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: CupertinoColors.systemGrey,
-                ),
+              Column(
+                children: [
+                  const Text(
+                    'VS',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    'First to $winningScore',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: CupertinoColors.systemGrey,
+                    ),
+                  ),
+                ],
+              ),
+              _buildPlayerScore(
+                name: opponent.name.split(' ')[0],
+                score: opponentScore,
+                ovr: opponent.overallRating,
+                isActive: !isPlayerTurn,
+                isPlayer: false,
               ),
             ],
           ),
-          _buildPlayerScore(
-            name: opponent.name.split(' ')[0],
-            score: opponentScore,
-            ovr: opponent.overallRating,
-            isActive: !isPlayerTurn,
-            isPlayer: false,
+          const SizedBox(height: 15),
+          CupertinoButton(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            minSize: 0,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  showStats ? CupertinoIcons.chart_bar_fill : CupertinoIcons.chart_bar,
+                  size: 16,
+                  color: CupertinoColors.activeOrange,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  showStats ? 'Hide Stats' : 'Show Stats',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: CupertinoColors.activeOrange,
+                  ),
+                ),
+              ],
+            ),
+            onPressed: () {
+              setState(() {
+                showStats = !showStats;
+              });
+            },
           ),
+          if (showStats) ...[
+            const SizedBox(height: 15),
+            _buildStatsDisplay(context),
+          ],
         ],
       ),
     );
@@ -232,6 +512,22 @@ class _MatchScreenState extends State<MatchScreen> with SingleTickerProviderStat
     required bool isActive,
     required bool isPlayer,
   }) {
+    final currentStamina = isPlayer ? playerStamina : opponentStamina;
+    final staminaPercent = currentStamina / maxStamina;
+    final currentStreak = isPlayer ? playerStreak : opponentStreak;
+    final streakStatus = _getStreakStatus(currentStreak);
+    final streakColor = _getStreakColor(currentStreak);
+
+    // Color based on stamina level
+    Color staminaColor;
+    if (staminaPercent > 0.6) {
+      staminaColor = CupertinoColors.activeGreen;
+    } else if (staminaPercent > 0.3) {
+      staminaColor = CupertinoColors.systemYellow;
+    } else {
+      staminaColor = CupertinoColors.systemRed;
+    }
+
     return Column(
       children: [
         Container(
@@ -268,6 +564,58 @@ class _MatchScreenState extends State<MatchScreen> with SingleTickerProviderStat
                   color: CupertinoColors.systemGrey,
                 ),
               ),
+              const SizedBox(height: 8),
+              // Stamina bar
+              Container(
+                width: 80,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: CupertinoColors.systemGrey5,
+                  borderRadius: BorderRadius.circular(3),
+                ),
+                child: FractionallySizedBox(
+                  alignment: Alignment.centerLeft,
+                  widthFactor: staminaPercent,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: staminaColor,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '${currentStamina.toInt()}%',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: staminaColor,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              // Streak indicator
+              if (streakStatus.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: streakColor.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: streakColor.withOpacity(0.5),
+                      width: 1,
+                    ),
+                  ),
+                  child: Text(
+                    streakStatus,
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                      color: streakColor,
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -420,11 +768,8 @@ class _MatchScreenState extends State<MatchScreen> with SingleTickerProviderStat
       ),
     );
   }
-  
-  Widget _buildMatchResult(BuildContext context, GameProvider gameProvider) {
-    final won = playerScore >= winningScore;
-    final opponent = widget.opponent!;
-    
+
+  Widget _buildDefensiveButtons(BuildContext context, GameProvider gameProvider) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -436,65 +781,127 @@ class _MatchScreenState extends State<MatchScreen> with SingleTickerProviderStat
       ),
       child: Column(
         children: [
-          Icon(
-            won ? CupertinoIcons.flag_fill : CupertinoIcons.xmark_circle_fill,
-            size: 50,
-            color: won ? CupertinoColors.activeOrange : CupertinoColors.systemRed,
-          ),
-          const SizedBox(height: 10),
-          Text(
-            won ? 'Victory!' : 'Defeat',
+          const Text(
+            'Opponent\'s Turn - Play Defense!',
             style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: won ? CupertinoColors.activeOrange : CupertinoColors.systemRed,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Final Score: $playerScore - $opponentScore',
-            style: const TextStyle(
               fontSize: 16,
+              fontWeight: FontWeight.bold,
             ),
           ),
-          if (won) ...[
-            const SizedBox(height: 15),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: CupertinoColors.systemGrey5.resolveFrom(context),
-                borderRadius: BorderRadius.circular(10),
+          const SizedBox(height: 15),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildActionButton(
+                context,
+                label: 'Steal',
+                icon: CupertinoIcons.hand_raised_fill,
+                color: CupertinoColors.systemBlue,
+                onTap: () => _attemptDefense(gameProvider, 'steal'),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildReward(
-                    icon: CupertinoIcons.money_dollar_circle,
-                    value: '+${opponent.rewardCoins}',
-                    color: CupertinoColors.activeGreen,
-                  ),
-                  _buildReward(
-                    icon: CupertinoIcons.star_circle,
-                    value: '+${opponent.rewardXP} XP',
-                    color: CupertinoColors.activeBlue,
-                  ),
-                  _buildReward(
-                    icon: CupertinoIcons.flag_fill,
-                    value: '+${opponent.rewardReputation}',
-                    color: CupertinoColors.activeOrange,
-                  ),
-                ],
+              _buildActionButton(
+                context,
+                label: 'Block',
+                icon: CupertinoIcons.shield_fill,
+                color: CupertinoColors.systemIndigo,
+                onTap: () => _attemptDefense(gameProvider, 'block'),
               ),
-            ),
-          ],
-          const SizedBox(height: 20),
-          CupertinoButton.filled(
-            child: const Text('Continue'),
-            onPressed: () {
-              Navigator.of(context).pop();
-            },
+              _buildActionButton(
+                context,
+                label: 'Let Play',
+                icon: CupertinoIcons.arrow_right,
+                color: CupertinoColors.systemGrey,
+                onTap: () {
+                  setState(() {
+                    isDefending = true;
+                    defensiveAction = null;
+                  });
+                },
+              ),
+            ],
           ),
         ],
+      ),
+    );
+  }
+  
+  Widget _buildMatchResult(BuildContext context, GameProvider gameProvider) {
+    final won = playerScore >= winningScore;
+    final opponent = widget.opponent!;
+
+    return SingleChildScrollView(
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: CupertinoColors.systemGrey6.resolveFrom(context),
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              won ? CupertinoIcons.flag_fill : CupertinoIcons.xmark_circle_fill,
+              size: 50,
+              color: won ? CupertinoColors.activeOrange : CupertinoColors.systemRed,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              won ? 'Victory!' : 'Defeat',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: won ? CupertinoColors.activeOrange : CupertinoColors.systemRed,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Final Score: $playerScore - $opponentScore',
+              style: const TextStyle(
+                fontSize: 16,
+              ),
+            ),
+            if (won) ...[
+              const SizedBox(height: 15),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: CupertinoColors.systemGrey5.resolveFrom(context),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildReward(
+                      icon: CupertinoIcons.money_dollar_circle,
+                      value: '+${opponent.rewardCoins}',
+                      color: CupertinoColors.activeGreen,
+                    ),
+                    _buildReward(
+                      icon: CupertinoIcons.star_circle,
+                      value: '+${opponent.rewardXP} XP',
+                      color: CupertinoColors.activeBlue,
+                    ),
+                    _buildReward(
+                      icon: CupertinoIcons.flag_fill,
+                      value: '+${opponent.rewardReputation}',
+                      color: CupertinoColors.activeOrange,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 20),
+            CupertinoButton.filled(
+              child: const Text('Continue'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -527,25 +934,40 @@ class _MatchScreenState extends State<MatchScreen> with SingleTickerProviderStat
   void _startMatch() {
     final gameProvider = context.read<GameProvider>();
     gameProvider.useEnergy(30);
-    
+
     setState(() {
       isMatchInProgress = true;
       playerScore = 0;
       opponentScore = 0;
       isPlayerTurn = true;
       isMatchComplete = false;
+      playerStamina = maxStamina;
+      opponentStamina = maxStamina;
+      isDefending = false;
+      defensiveAction = null;
+      playerStreak = 0;
+      opponentStreak = 0;
+      showStats = false;
+      _resetStats();
     });
   }
   
   void _performAction(GameProvider gameProvider, String action) {
     if (!isMatchInProgress || !isPlayerTurn) return;
-    
+
+    // Reset defensive state
+    setState(() {
+      isDefending = false;
+      defensiveAction = null;
+    });
+
     final player = gameProvider.player!;
     final opponent = widget.opponent!;
     final random = math.Random();
-    
+
+    // Calculate base success chance
     double successChance = 0.5;
-    
+
     switch (action) {
       case 'shoot':
         successChance = player.attributes.shooting / 150.0;
@@ -557,46 +979,480 @@ class _MatchScreenState extends State<MatchScreen> with SingleTickerProviderStat
         successChance = player.attributes.dribbling / 150.0;
         break;
     }
-    
+
+    // Apply defense modifier
     final defenseModifier = 1 - (opponent.defense / 200.0);
     successChance *= defenseModifier;
-    
+
+    // Apply fatigue modifier based on current stamina
+    final fatigueModifier = _getFatigueModifier(playerStamina, player.attributes.stamina);
+    successChance *= fatigueModifier;
+
+    // Apply momentum modifier based on current streak
+    final momentumModifier = _getMomentumModifier(playerStreak);
+    successChance *= momentumModifier;
+
+    // Reduce stamina for this action
+    _updateStamina(true, action);
+
     final scored = random.nextDouble() < successChance;
-    
+
+    // Update streak
+    _updateStreak(true, scored);
+
     setState(() {
+      // Track stats
+      playerStats['fgAttempted'] = (playerStats['fgAttempted'] ?? 0) + 1;
+
       if (scored) {
-        playerScore += action == 'shoot' && random.nextDouble() < 0.3 ? 3 : 2;
-        lastAction = action == 'shoot' ? 'Swish!' : action == 'drive' ? 'And one!' : 'Ankle breaker!';
+        playerStats['fgMade'] = (playerStats['fgMade'] ?? 0) + 1;
+
+        // Check if it's a 3-pointer
+        final isThree = action == 'shoot' && random.nextDouble() < 0.3;
+        if (isThree) {
+          playerStats['threeAttempted'] = (playerStats['threeAttempted'] ?? 0) + 1;
+          playerStats['threeMade'] = (playerStats['threeMade'] ?? 0) + 1;
+          playerScore += 3;
+        } else {
+          if (action == 'shoot') {
+            playerStats['threeAttempted'] = (playerStats['threeAttempted'] ?? 0) + 1;
+          }
+          playerScore += 2;
+        }
+
+        // Add streak-aware messages
+        String baseMessage = action == 'shoot' ? 'Swish!' : action == 'drive' ? 'And one!' : 'Ankle breaker!';
+        if (playerStreak >= hotStreakThreshold) {
+          baseMessage = '🔥 $baseMessage HEATING UP!';
+        }
+        lastAction = baseMessage;
       } else {
-        lastAction = 'Missed!';
+        // Track missed 3-point attempts
+        if (action == 'shoot') {
+          playerStats['threeAttempted'] = (playerStats['threeAttempted'] ?? 0) + 1;
+        }
+
+        String baseMessage = 'Missed!';
+        if (playerStreak <= coldStreakThreshold) {
+          baseMessage = '🧊 $baseMessage Can\'t buy a bucket...';
+        }
+        lastAction = baseMessage;
       }
-      
+
       isPlayerTurn = false;
     });
-    
+
     _animationController.forward(from: 0.0);
-    
+
     if (playerScore >= winningScore) {
       _endMatch(gameProvider, true);
     } else {
+      // Small stamina recovery for opponent before their turn
+      _recoverStamina(false, opponent.defense); // Using defense as stamina proxy
+
       Future.delayed(const Duration(seconds: 2), () {
         _opponentTurn(gameProvider);
       });
     }
   }
   
+  /// Attempt a defensive action (steal or block)
+  void _attemptDefense(GameProvider gameProvider, String action) {
+    setState(() {
+      isDefending = true;
+      defensiveAction = action;
+    });
+  }
+
+  /// Get momentum modifier based on current streak
+  /// Returns a value between 0.85 and 1.15
+  double _getMomentumModifier(int streak) {
+    if (streak >= hotStreakThreshold) {
+      // Hot streak: +10-15% bonus
+      final bonus = 0.10 + ((streak - hotStreakThreshold) * 0.01).clamp(0.0, 0.05);
+      return 1.0 + bonus;
+    } else if (streak <= coldStreakThreshold) {
+      // Cold streak: -5-10% penalty
+      final penalty = 0.05 + ((coldStreakThreshold - streak).abs() * 0.01).clamp(0.0, 0.05);
+      return 1.0 - penalty;
+    }
+    return 1.0; // No modifier
+  }
+
+  /// Update streak based on success/failure
+  void _updateStreak(bool isPlayer, bool success) {
+    setState(() {
+      if (isPlayer) {
+        if (success) {
+          playerStreak = playerStreak < 0 ? 1 : playerStreak + 1;
+        } else {
+          playerStreak = playerStreak > 0 ? -1 : playerStreak - 1;
+        }
+      } else {
+        if (success) {
+          opponentStreak = opponentStreak < 0 ? 1 : opponentStreak + 1;
+        } else {
+          opponentStreak = opponentStreak > 0 ? -1 : opponentStreak - 1;
+        }
+      }
+    });
+  }
+
+  /// Get streak status text
+  String _getStreakStatus(int streak) {
+    if (streak >= hotStreakThreshold) {
+      return '🔥 ON FIRE!';
+    } else if (streak <= coldStreakThreshold) {
+      return '🧊 COLD';
+    }
+    return '';
+  }
+
+  /// Get streak color
+  Color _getStreakColor(int streak) {
+    if (streak >= hotStreakThreshold) {
+      return CupertinoColors.systemOrange;
+    } else if (streak <= coldStreakThreshold) {
+      return CupertinoColors.systemBlue;
+    }
+    return CupertinoColors.systemGrey;
+  }
+
+  /// Calculate field goal percentage
+  double _getFGPercentage(Map<String, int> stats) {
+    final attempted = stats['fgAttempted'] ?? 0;
+    if (attempted == 0) return 0.0;
+    final made = stats['fgMade'] ?? 0;
+    return (made / attempted) * 100;
+  }
+
+  /// Calculate three-point percentage
+  double _getThreePercentage(Map<String, int> stats) {
+    final attempted = stats['threeAttempted'] ?? 0;
+    if (attempted == 0) return 0.0;
+    final made = stats['threeMade'] ?? 0;
+    return (made / attempted) * 100;
+  }
+
+  /// Reset all match statistics
+  void _resetStats() {
+    playerStats.forEach((key, value) {
+      playerStats[key] = 0;
+    });
+    opponentStats.forEach((key, value) {
+      opponentStats[key] = 0;
+    });
+  }
+
+  /// Build stats display widget
+  Widget _buildStatsDisplay(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: CupertinoColors.systemBackground.resolveFrom(context),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          _buildStatRow(
+            context,
+            label: 'FG%',
+            playerValue: '${_getFGPercentage(playerStats).toStringAsFixed(1)}%',
+            opponentValue: '${_getFGPercentage(opponentStats).toStringAsFixed(1)}%',
+            playerRaw: '${playerStats['fgMade']}/${playerStats['fgAttempted']}',
+            opponentRaw: '${opponentStats['fgMade']}/${opponentStats['fgAttempted']}',
+          ),
+          Container(
+            height: 1,
+            margin: const EdgeInsets.symmetric(vertical: 10),
+            color: CupertinoColors.systemGrey5.resolveFrom(context),
+          ),
+          _buildStatRow(
+            context,
+            label: '3P%',
+            playerValue: '${_getThreePercentage(playerStats).toStringAsFixed(1)}%',
+            opponentValue: '${_getThreePercentage(opponentStats).toStringAsFixed(1)}%',
+            playerRaw: '${playerStats['threeMade']}/${playerStats['threeAttempted']}',
+            opponentRaw: '${opponentStats['threeMade']}/${opponentStats['threeAttempted']}',
+          ),
+          Container(
+            height: 1,
+            margin: const EdgeInsets.symmetric(vertical: 10),
+            color: CupertinoColors.systemGrey5.resolveFrom(context),
+          ),
+          _buildStatRow(
+            context,
+            label: 'Steals',
+            playerValue: '${playerStats['steals']}',
+            opponentValue: '${opponentStats['steals']}',
+          ),
+          Container(
+            height: 1,
+            margin: const EdgeInsets.symmetric(vertical: 10),
+            color: CupertinoColors.systemGrey5.resolveFrom(context),
+          ),
+          _buildStatRow(
+            context,
+            label: 'Blocks',
+            playerValue: '${playerStats['blocks']}',
+            opponentValue: '${opponentStats['blocks']}',
+          ),
+          Container(
+            height: 1,
+            margin: const EdgeInsets.symmetric(vertical: 10),
+            color: CupertinoColors.systemGrey5.resolveFrom(context),
+          ),
+          _buildStatRow(
+            context,
+            label: 'Turnovers',
+            playerValue: '${playerStats['turnovers']}',
+            opponentValue: '${opponentStats['turnovers']}',
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Build individual stat row
+  Widget _buildStatRow(
+    BuildContext context, {
+    required String label,
+    required String playerValue,
+    required String opponentValue,
+    String? playerRaw,
+    String? opponentRaw,
+  }) {
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                playerValue,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: CupertinoColors.activeOrange,
+                ),
+              ),
+              if (playerRaw != null)
+                Text(
+                  playerRaw,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: CupertinoColors.systemGrey,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: CupertinoColors.systemGrey,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                opponentValue,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: CupertinoColors.systemBlue,
+                ),
+              ),
+              if (opponentRaw != null)
+                Text(
+                  opponentRaw,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: CupertinoColors.systemGrey,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Get stamina cost for an action
+  double _getStaminaCost(String action) {
+    switch (action) {
+      case 'shoot':
+        return 3.0; // Least tiring
+      case 'drive':
+        return 6.0; // Most tiring - explosive movement
+      case 'trick':
+        return 5.0; // Moderately tiring - quick movements
+      default:
+        return 4.0;
+    }
+  }
+
+  /// Calculate fatigue modifier based on current stamina and stamina attribute
+  /// Returns a value between 0.5 and 1.0
+  double _getFatigueModifier(double currentStamina, int staminaAttribute) {
+    // Stamina percentage (0.0 to 1.0)
+    final staminaPercent = currentStamina / maxStamina;
+
+    // Higher stamina attribute = better performance when tired
+    // Stamina attribute ranges from 50-99
+    final staminaFactor = staminaAttribute / 100.0;
+
+    // Base modifier from current stamina (0.5 to 1.0)
+    final baseModifier = 0.5 + (staminaPercent * 0.5);
+
+    // Stamina attribute reduces the penalty when tired
+    // If stamina is high (90+), penalty is minimal even when tired
+    // If stamina is low (50), penalty is more severe
+    final adjustedModifier = baseModifier + ((1.0 - baseModifier) * staminaFactor * 0.5);
+
+    return adjustedModifier.clamp(0.5, 1.0);
+  }
+
+  /// Reduce stamina and apply small recovery
+  void _updateStamina(bool isPlayer, String action) {
+    final cost = _getStaminaCost(action);
+
+    setState(() {
+      if (isPlayer) {
+        playerStamina = (playerStamina - cost).clamp(0.0, maxStamina);
+      } else {
+        opponentStamina = (opponentStamina - cost).clamp(0.0, maxStamina);
+      }
+    });
+  }
+
+  /// Small stamina recovery between possessions
+  void _recoverStamina(bool isPlayer, int staminaAttribute) {
+    // Recovery amount based on stamina attribute (1-3 points)
+    final recovery = 1.0 + (staminaAttribute / 50.0);
+
+    setState(() {
+      if (isPlayer) {
+        playerStamina = (playerStamina + recovery).clamp(0.0, maxStamina);
+      } else {
+        opponentStamina = (opponentStamina + recovery).clamp(0.0, maxStamina);
+      }
+    });
+  }
+
+  /// Get action weights based on opponent's playstyle
+  Map<String, double> _getPlaystyleWeights(String playstyle) {
+    switch (playstyle.toLowerCase()) {
+      case 'shooter':
+        return {'shoot': 0.60, 'drive': 0.25, 'trick': 0.15};
+      case 'speedster':
+      case 'athletic':
+        return {'shoot': 0.25, 'drive': 0.60, 'trick': 0.15};
+      case 'dribbler':
+      case 'streetball':
+      case 'flashy':
+        return {'shoot': 0.25, 'drive': 0.30, 'trick': 0.45};
+      case 'defender':
+        return {'shoot': 0.50, 'drive': 0.35, 'trick': 0.15};
+      case 'scorer':
+        return {'shoot': 0.50, 'drive': 0.35, 'trick': 0.15};
+      case 'all-around':
+      case 'balanced':
+        return {'shoot': 0.35, 'drive': 0.35, 'trick': 0.30};
+      case 'legendary':
+        return {'shoot': 0.40, 'drive': 0.30, 'trick': 0.30};
+      default:
+        return {'shoot': 0.33, 'drive': 0.33, 'trick': 0.34};
+    }
+  }
+
+  /// Select action based on weighted probabilities
+  String _selectWeightedAction(Map<String, double> weights) {
+    final random = math.Random();
+    final roll = random.nextDouble();
+
+    double cumulative = 0.0;
+    for (final entry in weights.entries) {
+      cumulative += entry.value;
+      if (roll <= cumulative) {
+        return entry.key;
+      }
+    }
+
+    return 'shoot'; // Fallback
+  }
+
   void _opponentTurn(GameProvider gameProvider) {
     if (!isMatchInProgress || isPlayerTurn) return;
-    
+
     final player = gameProvider.player!;
     final opponent = widget.opponent!;
     final random = math.Random();
-    
-    final actions = ['shoot', 'drive', 'trick'];
-    final action = actions[random.nextInt(actions.length)];
-    
+
+    // Check if player is attempting a defensive action
+    bool defensiveSuccess = false;
+    String defenseResult = '';
+
+    if (defensiveAction != null) {
+      // Calculate defensive success chance
+      double defenseChance = 0.0;
+
+      if (defensiveAction == 'steal') {
+        // Steal: player's defense vs opponent's dribbling
+        defenseChance = (player.attributes.defense / (player.attributes.defense + opponent.dribbling)) * 0.4; // Max 40% chance
+      } else if (defensiveAction == 'block') {
+        // Block: player's defense vs opponent's shooting/speed
+        final opponentOffense = (opponent.shooting + opponent.speed) / 2;
+        defenseChance = (player.attributes.defense / (player.attributes.defense + opponentOffense)) * 0.35; // Max 35% chance
+      }
+
+      defensiveSuccess = random.nextDouble() < defenseChance;
+
+      if (defensiveSuccess) {
+        // Defensive action succeeded!
+        setState(() {
+          if (defensiveAction == 'steal') {
+            playerStats['steals'] = (playerStats['steals'] ?? 0) + 1;
+            opponentStats['turnovers'] = (opponentStats['turnovers'] ?? 0) + 1;
+            lastAction = 'STEAL! You got the ball!';
+            isPlayerTurn = true;
+            isDefending = false;
+            defensiveAction = null;
+          } else {
+            playerStats['blocks'] = (playerStats['blocks'] ?? 0) + 1;
+            lastAction = 'BLOCKED! Great defense!';
+            isPlayerTurn = true;
+            isDefending = false;
+            defensiveAction = null;
+          }
+        });
+
+        _animationController.forward(from: 0.0);
+
+        // Small stamina recovery for player
+        _recoverStamina(true, player.attributes.stamina);
+
+        return; // End opponent's turn, player gets possession
+      } else {
+        // Defensive action failed - opponent gets bonus
+        defenseResult = defensiveAction == 'steal' ? 'Steal attempt failed!' : 'Block attempt failed!';
+      }
+    }
+
+    // Use playstyle-based action selection
+    final weights = _getPlaystyleWeights(opponent.playstyle);
+    final action = _selectWeightedAction(weights);
+
+    // Calculate base success chance
     double successChance = 0.5;
-    
+
     switch (action) {
       case 'shoot':
         successChance = opponent.shooting / 150.0;
@@ -608,25 +1464,86 @@ class _MatchScreenState extends State<MatchScreen> with SingleTickerProviderStat
         successChance = opponent.dribbling / 150.0;
         break;
     }
-    
+
+    // Apply defense modifier
     final defenseModifier = 1 - (player.attributes.defense / 200.0);
     successChance *= defenseModifier;
-    
+
+    // Apply fatigue modifier (using defense as stamina proxy for opponent)
+    final fatigueModifier = _getFatigueModifier(opponentStamina, opponent.defense);
+    successChance *= fatigueModifier;
+
+    // Apply momentum modifier based on current streak
+    final momentumModifier = _getMomentumModifier(opponentStreak);
+    successChance *= momentumModifier;
+
+    // If defensive action failed, opponent gets a bonus
+    if (defensiveAction != null && !defensiveSuccess) {
+      successChance *= 1.2; // 20% bonus for failed defensive attempt
+    }
+
+    // Reduce stamina for this action
+    _updateStamina(false, action);
+
     final scored = random.nextDouble() < successChance;
-    
+
+    // Update streak
+    _updateStreak(false, scored);
+
     setState(() {
+      // Track stats
+      opponentStats['fgAttempted'] = (opponentStats['fgAttempted'] ?? 0) + 1;
+
       if (scored) {
-        opponentScore += action == 'shoot' && random.nextDouble() < 0.3 ? 3 : 2;
-        lastAction = '${opponent.name.split(' ')[0]} scores!';
+        opponentStats['fgMade'] = (opponentStats['fgMade'] ?? 0) + 1;
+
+        // Check if it's a 3-pointer
+        final isThree = action == 'shoot' && random.nextDouble() < 0.3;
+        if (isThree) {
+          opponentStats['threeAttempted'] = (opponentStats['threeAttempted'] ?? 0) + 1;
+          opponentStats['threeMade'] = (opponentStats['threeMade'] ?? 0) + 1;
+          opponentScore += 3;
+        } else {
+          if (action == 'shoot') {
+            opponentStats['threeAttempted'] = (opponentStats['threeAttempted'] ?? 0) + 1;
+          }
+          opponentScore += 2;
+        }
+
+        String baseMessage = defenseResult.isNotEmpty
+            ? '$defenseResult ${opponent.name.split(' ')[0]} scores!'
+            : '${opponent.name.split(' ')[0]} scores!';
+
+        if (opponentStreak >= hotStreakThreshold) {
+          baseMessage = '🔥 $baseMessage They\'re on fire!';
+        }
+        lastAction = baseMessage;
       } else {
-        lastAction = '${opponent.name.split(' ')[0]} misses!';
+        // Track missed 3-point attempts
+        if (action == 'shoot') {
+          opponentStats['threeAttempted'] = (opponentStats['threeAttempted'] ?? 0) + 1;
+        }
+
+        String baseMessage = defenseResult.isNotEmpty
+            ? '$defenseResult ${opponent.name.split(' ')[0]} misses!'
+            : '${opponent.name.split(' ')[0]} misses!';
+
+        if (opponentStreak <= coldStreakThreshold) {
+          baseMessage = '🧊 $baseMessage They\'re ice cold!';
+        }
+        lastAction = baseMessage;
       }
-      
+
       isPlayerTurn = true;
+      isDefending = false;
+      defensiveAction = null;
     });
-    
+
     _animationController.forward(from: 0.0);
-    
+
+    // Small stamina recovery for player before their turn
+    _recoverStamina(true, player.attributes.stamina);
+
     if (opponentScore >= winningScore) {
       _endMatch(gameProvider, false);
     }

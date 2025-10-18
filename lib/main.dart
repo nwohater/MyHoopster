@@ -48,26 +48,72 @@ class _MainTabScaffoldState extends State<MainTabScaffold> {
       child: CupertinoTabScaffold(
         controller: _tabController,
         tabBar: CupertinoTabBar(
+          backgroundColor: CupertinoColors.systemBackground.resolveFrom(context),
+          activeColor: CupertinoColors.activeOrange,
+          inactiveColor: CupertinoColors.systemGrey,
+          iconSize: 28.0,
+          height: 65.0,
+          border: Border(
+            top: BorderSide(
+              color: CupertinoColors.systemGrey5.resolveFrom(context),
+              width: 0.5,
+            ),
+          ),
           items: const <BottomNavigationBarItem>[
             BottomNavigationBarItem(
-              icon: Icon(CupertinoIcons.home),
+              icon: Padding(
+                padding: EdgeInsets.only(bottom: 4),
+                child: Icon(CupertinoIcons.house_fill),
+              ),
+              activeIcon: Padding(
+                padding: EdgeInsets.only(bottom: 4),
+                child: Icon(CupertinoIcons.house_fill),
+              ),
               label: 'Home',
             ),
             BottomNavigationBarItem(
-              icon: Icon(CupertinoIcons.person_fill),
+              icon: Padding(
+                padding: EdgeInsets.only(bottom: 4),
+                child: Icon(CupertinoIcons.person_circle),
+              ),
+              activeIcon: Padding(
+                padding: EdgeInsets.only(bottom: 4),
+                child: Icon(CupertinoIcons.person_circle_fill),
+              ),
               label: 'Player',
             ),
             BottomNavigationBarItem(
-              icon: Icon(CupertinoIcons.sportscourt),
+              icon: Padding(
+                padding: EdgeInsets.only(bottom: 4),
+                child: Icon(CupertinoIcons.flame),
+              ),
+              activeIcon: Padding(
+                padding: EdgeInsets.only(bottom: 4),
+                child: Icon(CupertinoIcons.flame_fill),
+              ),
               label: 'Training',
             ),
             BottomNavigationBarItem(
-              icon: Icon(CupertinoIcons.location_fill),
+              icon: Padding(
+                padding: EdgeInsets.only(bottom: 4),
+                child: Icon(CupertinoIcons.map),
+              ),
+              activeIcon: Padding(
+                padding: EdgeInsets.only(bottom: 4),
+                child: Icon(CupertinoIcons.map_fill),
+              ),
               label: 'Parks',
             ),
             BottomNavigationBarItem(
-              icon: Icon(CupertinoIcons.game_controller_solid),
-              label: 'Match',
+              icon: Padding(
+                padding: EdgeInsets.only(bottom: 4),
+                child: Icon(CupertinoIcons.chart_bar_circle),
+              ),
+              activeIcon: Padding(
+                padding: EdgeInsets.only(bottom: 4),
+                child: Icon(CupertinoIcons.chart_bar_circle_fill),
+              ),
+              label: 'Stats',
             ),
           ],
         ),
